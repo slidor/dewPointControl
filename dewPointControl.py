@@ -5,6 +5,7 @@
 
 import os, sys, time
 import Adafruit_DHT
+import dweepy
 import RPi.GPIO as GPIO
 
 outdoorSensor = Adafruit_DHT.DHT22
@@ -19,7 +20,20 @@ GPIO.setmode(GPIO.BOARD)
 
 GPIO.setup(relaisPin, GPIO.OUT)
 
-def ventilate():
+def getserial():
+  # Extract serial from cpuinfo file
+  cpuserial = "0000000000000000"
+  try:
+    f = open('/proc/cpuinfo','r')
+    for line in f:
+      if line[0:6]=='Serial':
+        cpuserial = line[10:26]
+    f.close()
+  except:
+    cpuserial = "ERROR000000000"
+  return cpuserial
+
+def startVentilation():
     GPIO.output(relaisPin, GPIO.HIGH)
 
 def stopVentilation():
@@ -47,6 +61,7 @@ def calculateAbsoluteHumidity(relHumidity, temperature):
 
 def ventilationMakesSense():
     result = false
+    thingname = getserial() + "basementPi"
 
     indoorHumidity, indoorTemperature, oudoorHumidity, oudoorTemperature = readSensorData()
     absoluteIndoorHumidity = calculateAbsoluteHumidity(indoorHumidity, indoorTemperature)
@@ -55,9 +70,12 @@ def ventilationMakesSense():
     if (absoluteIndoorHumidity > absoluteOutdoorHumidity):
         result = true
 
+    # Send sensor deta and results to dweet.io
+    dweepy.dweet_for(thingname, {'indoorHumidity': indoorHumidity, 'indoorTemperature': indoorTemperature, 'absoluteIndoorHumidity': absoluteIndoorHumidity, 'oudoorHumidity': oudoorHumidity, 'oudoorTemperature': oudoorTemperature, 'absoluteOutdoorHumidity': absoluteOutdoorHumidity, 'ventilation': result})
+
     return result
 
 if (ventilationMakesSense):
-    ventilate()
+    startVentilation()
 else:
     stopVentilation()

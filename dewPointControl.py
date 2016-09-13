@@ -20,6 +20,10 @@ GPIO.setmode(GPIO.BOARD)
 
 GPIO.setup(relaisPin, GPIO.OUT)
 
+dewPointLowerBorder = 2
+dewPointUpperBorder = 9
+minIndoorTemp = 10
+
 def getserial():
   # Extract serial from cpuinfo file
   cpuserial = "0000000000000000"
@@ -44,34 +48,25 @@ def readSensorData():
     oudoorHumidity, oudoorTemperature = Adafruit_DHT.read.retry(outdoorSensor, outdoorSensorPin)
     return(indoorHumidity, indoorTemperature, oudoorHumidity, oudoorTemperature)
 
-def calculateAbsoluteHumidity(relHumidity, temperature):
-    a = 7.5
-    b = 237.3
-    mw = 18.016
-    R = 8314.3
-
-    if (temperature < 0):
-        a = 7.6
-        b = 240.7
-
-    TK = temperature + 273.15
-    SDD = 6.1078 * 10**((a * temperature)/(b + temperature))
-    DD = relHumidity/100 * SDD
-    AF = 10**5 * mw/R * DD/TK
+def calculateDewPointTemperature(relHumidity, temperature):
+	#relHumidity in percent
+	return ((relHumidity / 100) ** (1 / 8.02)) * (109.8 + temperature) - 109.8 
 
 def ventilationMakesSense():
     result = false
     thingname = getserial() + "basementPi"
 
     indoorHumidity, indoorTemperature, oudoorHumidity, oudoorTemperature = readSensorData()
-    absoluteIndoorHumidity = calculateAbsoluteHumidity(indoorHumidity, indoorTemperature)
-    absoluteOutdoorHumidity = calculateAbsoluteHumidity(oudoorHumidity, oudoorTemperature)
-
-    if (absoluteIndoorHumidity > absoluteOutdoorHumidity):
-        result = true
+    indoorDewPoint = calculateDewPointTemperature(indoorHumidity, indoorTemperature)
+    outdoorDewPoint = calculateDewPointTemperature(oudoorHumidity, oudoorTemperature)
+	
+	dewPointDiff = indoorDewPoint - outdoorDewPoint
+	
+    if (indoorTemperature > minIndoorTemp && (dewPointDiff >= dewPointLowerBorder || dewPointDiff <= dewPointUpperBorder):
+    	return true
 
     # Send sensor deta and results to dweet.io
-    dweepy.dweet_for(thingname, {'indoorHumidity': indoorHumidity, 'indoorTemperature': indoorTemperature, 'absoluteIndoorHumidity': absoluteIndoorHumidity, 'oudoorHumidity': oudoorHumidity, 'oudoorTemperature': oudoorTemperature, 'absoluteOutdoorHumidity': absoluteOutdoorHumidity, 'ventilation': result})
+    dweepy.dweet_for(thingname, {'indoorHumidity': indoorHumidity, 'indoorTemperature': indoorTemperature, 'indoorDewPoint': indoorDewPoint, 'oudoorHumidity': oudoorHumidity, 'oudoorTemperature': oudoorTemperature, 'outdoorDewPoint': outdoorDewPoint, 'ventilation': result})
 
     return result
 
